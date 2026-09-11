@@ -1,0 +1,8 @@
+{
+  "name": "learning-mode",
+  "description": "Local-first, explicitly activated learning support for Claude Code sessions",
+  "version": "0.1.0",
+  "author": {
+    "name": "Learning Mode Contributors"
+  }
+}
