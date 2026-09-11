@@ -163,3 +163,31 @@ class ConceptKnowledgeState(BaseModel):
     dimensions: dict[KnowledgeDimension, DimensionKnowledgeState]
     current_misconception_status: Literal["none", "active", "corrected"]
     derived_at: datetime
+
+
+class LearningDepth(str, Enum):
+    PRIMARY = "primary"
+    PROJECT_REQUIREMENT = "project_requirement"
+    INCIDENTAL = "incidental"
+
+
+class PUCProposal(BaseModel):
+    concept_name: str = Field(min_length=1)
+    learning_depth: LearningDepth
+    rationale: str = Field(min_length=1)
+
+
+class PUCEntry(BaseModel):
+    project_id: str
+    concept_id: str
+    learning_depth: LearningDepth
+    rationale: str
+    active: bool
+
+
+class UnderstandingDebtItem(BaseModel):
+    project_id: str
+    concept_id: str
+    status: Literal["open", "resolved"]
+    rationale: str
+    updated_at: datetime
