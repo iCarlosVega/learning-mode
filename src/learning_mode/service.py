@@ -20,7 +20,7 @@ from learning_mode.models import (
 from learning_mode.paths import LearningPaths
 from learning_mode.projects import ProjectService
 from learning_mode.puc import PUCService
-from learning_mode.sessions import SessionService
+from learning_mode.sessions import SessionNotFound, SessionService
 
 
 class LearningService:
@@ -50,14 +50,21 @@ class LearningService:
         )
 
     def session_start(
-        self, host: str, project_id: str | None = None
+        self,
+        host: str,
+        project_id: str | None = None,
+        host_session_id: str | None = None,
+        project_path: Path | None = None,
     ) -> ResultEnvelope:
         try:
-            session = self.sessions.start(host, project_id)
+            if project_path is not None:
+                project_id = self.projects.register(project_path).project_id
+            session = self.sessions.start(host, project_id, host_session_id)
             return ResultEnvelope(
                 ok=True,
                 status=session.status,
                 message="Learning Mode session created; learning starts off.",
+                session_id=session.session_id,
                 data=session.model_dump(mode="json"),
             )
         except (OSError, sqlite3.Error) as error:
@@ -96,14 +103,35 @@ class LearningService:
         except (OSError, sqlite3.Error) as error:
             return self._suspended(session_id, error)
 
-    def status(self, session_id: str) -> ResultEnvelope:
+    def status(
+        self,
+        session_id: str | None = None,
+        host: str | None = None,
+        host_session_id: str | None = None,
+    ) -> ResultEnvelope:
         try:
-            session = self.sessions.get(session_id)
+            session = None
+            if session_id is not None:
+                session = self.sessions.get(session_id)
+            elif host is not None and host_session_id is not None:
+                session = self.sessions.find_by_host_session(host, host_session_id)
+            if session is None:
+                return ResultEnvelope(
+                    ok=True,
+                    status="off",
+                    message="No Learning Mode session is active or selected.",
+                )
             return ResultEnvelope(
                 ok=True,
                 status=session.status,
                 message=f"Learning Mode is {session.status} for this session.",
                 data=session.model_dump(mode="json"),
+            )
+        except SessionNotFound:
+            return ResultEnvelope(
+                ok=False,
+                status="off",
+                message="Learning Mode session was not found.",
             )
         except (OSError, sqlite3.Error) as error:
             return self._suspended(session_id, error)
@@ -116,6 +144,26 @@ class LearningService:
                 status="registered",
                 message="Project identity is registered locally.",
                 data=project.model_dump(mode="json"),
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(None, error)
+
+    def set_project_intent(
+        self,
+        project_id: str,
+        goals: Sequence[str],
+        comfortable: Sequence[str],
+        deprioritized: Sequence[str],
+    ) -> ResultEnvelope:
+        try:
+            intent = self.projects.set_intent(
+                project_id, goals, comfortable, deprioritized
+            )
+            return ResultEnvelope(
+                ok=True,
+                status="updated",
+                message="Project learning intent updated.",
+                data=intent.model_dump(mode="json"),
             )
         except (OSError, sqlite3.Error) as error:
             return self._suspended(None, error)

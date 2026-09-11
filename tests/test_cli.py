@@ -1,5 +1,13 @@
+import json
+
+from typer.testing import CliRunner
+
+from learning_mode.cli import app
 from learning_mode.models import CandidateObservation
 from learning_mode.service import LearningService
+
+
+runner = CliRunner()
 
 
 def make_candidate(session_id: str) -> CandidateObservation:
@@ -93,3 +101,76 @@ def test_invalid_candidate_is_rejected_without_crashing_host(tmp_path):
     assert result.ok is False
     assert result.status == "rejected"
     assert result.host_should_continue is True
+
+
+def test_session_start_defaults_off(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("LEARNING_MODE_HOME", str(home))
+
+    result = runner.invoke(app, ["session-start", "--host", "codex", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "off"
+    assert payload["session_id"].startswith("sess_")
+
+
+def test_host_session_id_maps_to_same_core_session(tmp_path, monkeypatch):
+    monkeypatch.setenv("LEARNING_MODE_HOME", str(tmp_path / "home"))
+    args = [
+        "session-start",
+        "--host",
+        "claude",
+        "--host-session-id",
+        "host-123",
+        "--json",
+    ]
+
+    first = json.loads(runner.invoke(app, args).stdout)
+    second = json.loads(runner.invoke(app, args).stdout)
+
+    assert first["data"]["session_id"] == second["data"]["session_id"]
+
+
+def test_cli_hard_cutoff_rejects_post_off_observation(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("LEARNING_MODE_HOME", str(home))
+    started = runner.invoke(app, ["session-start", "--host", "codex", "--json"])
+    session_id = json.loads(started.stdout)["data"]["session_id"]
+    assert runner.invoke(app, ["on", "--session", session_id, "--json"]).exit_code == 0
+    observation = tmp_path / "observation.json"
+    observation.write_text(
+        json.dumps(
+            {
+                "session_id": session_id,
+                "concept_name": "transactions",
+                "evidence_type": "guided_application",
+                "assistance_level": "targeted_hint",
+                "dimensions": {"application": "moderate"},
+                "agent_confidence": "high",
+                "summary": "Developer applied the transaction after a targeted hint.",
+            }
+        )
+    )
+
+    before = runner.invoke(
+        app, ["observe", "--input", str(observation), "--json"]
+    )
+    stopped = runner.invoke(app, ["off", "--session", session_id, "--json"])
+    after = runner.invoke(
+        app, ["observe", "--input", str(observation), "--json"]
+    )
+
+    assert json.loads(before.stdout)["status"] == "recorded"
+    assert json.loads(stopped.stdout)["status"] == "off"
+    assert json.loads(after.stdout)["status"] == "off"
+    assert LearningService(home).evidence.count_for_session(session_id) == 1
+
+
+def test_cli_help_lists_v1_command_groups():
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    for command in ["session-start", "on", "off", "status", "context", "observe"]:
+        assert command in result.stdout
+    assert "project" in result.stdout
+    assert "test" in result.stdout

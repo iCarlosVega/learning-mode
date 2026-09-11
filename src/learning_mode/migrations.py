@@ -1,6 +1,6 @@
 from learning_mode.db import Database
 
-LATEST_SCHEMA_VERSION = 3
+LATEST_SCHEMA_VERSION = 4
 
 
 _MIGRATION_1 = """
@@ -96,6 +96,14 @@ BEFORE DELETE ON evidence_events
 BEGIN SELECT RAISE(ABORT, 'evidence is append-only'); END;
 """
 
+_MIGRATION_4 = """
+ALTER TABLE sessions ADD COLUMN host_session_id TEXT;
+
+CREATE UNIQUE INDEX idx_sessions_host_session
+ON sessions(host, host_session_id)
+WHERE host_session_id IS NOT NULL;
+"""
+
 
 def migrate(db: Database) -> None:
     """Bring *db* to the latest schema version."""
@@ -112,3 +120,7 @@ def migrate(db: Database) -> None:
         if version < 3:
             conn.executescript(_MIGRATION_3)
             conn.execute("PRAGMA user_version = 3")
+            version = 3
+        if version < 4:
+            conn.executescript(_MIGRATION_4)
+            conn.execute("PRAGMA user_version = 4")

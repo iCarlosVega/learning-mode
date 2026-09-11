@@ -32,6 +32,7 @@ class SessionRecord(BaseModel):
     cutoff_at: datetime | None
     created_at: datetime
     suspension_reason: str | None = None
+    host_session_id: str | None = None
 
 
 class ProjectRecord(BaseModel):
@@ -223,6 +224,7 @@ class ResultEnvelope(BaseModel):
     status: str
     message: str
     host_should_continue: bool = True
+    session_id: str | None = None
     data: dict[str, Any] | list[Any] | None = None
 
 

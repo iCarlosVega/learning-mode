@@ -20,9 +20,20 @@ class SessionService:
         self.db = db
         self._now = now
 
-    def start(self, host: str, project_id: str | None) -> SessionRecord:
+    def start(
+        self,
+        host: str,
+        project_id: str | None,
+        host_session_id: str | None = None,
+    ) -> SessionRecord:
         if host not in {"codex", "claude"}:
             raise ValueError(f"unsupported host: {host}")
+        if host_session_id:
+            existing = self.find_by_host_session(host, host_session_id)
+            if existing is not None:
+                if project_id is not None and existing.project_id != project_id:
+                    return self.attach_project(existing.session_id, project_id)
+                return existing
         session_id = new_id("sess")
         created_at = to_db_timestamp(self._now())
         with self.db.transaction() as conn:
@@ -30,10 +41,10 @@ class SessionService:
                 """
                 INSERT INTO sessions (
                     session_id, host, project_id, status, activated_at,
-                    cutoff_at, created_at, suspension_reason
-                ) VALUES (?, ?, ?, 'off', NULL, NULL, ?, NULL)
+                    cutoff_at, created_at, suspension_reason, host_session_id
+                ) VALUES (?, ?, ?, 'off', NULL, NULL, ?, NULL, ?)
                 """,
-                (session_id, host, project_id, created_at),
+                (session_id, host, project_id, created_at, host_session_id),
             )
         return self.get(session_id)
 
@@ -141,6 +152,19 @@ class SessionService:
                 raise SessionNotFound(session_id)
         return self.get(session_id)
 
+    def find_by_host_session(
+        self, host: str, host_session_id: str
+    ) -> SessionRecord | None:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM sessions
+                WHERE host = ? AND host_session_id = ?
+                """,
+                (host, host_session_id),
+            ).fetchone()
+        return self._record(row) if row is not None else None
+
     def accepts_event_at(self, session_id: str, occurred_at: datetime) -> bool:
         if not self.is_active(session_id):
             return False
@@ -172,4 +196,5 @@ class SessionService:
             cutoff_at=from_db_timestamp(row["cutoff_at"]),
             created_at=from_db_timestamp(row["created_at"]),
             suspension_reason=row["suspension_reason"],
+            host_session_id=row["host_session_id"],
         )
