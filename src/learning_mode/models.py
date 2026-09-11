@@ -123,3 +123,22 @@ class EvidenceEvent(BaseModel):
     occurred_at: datetime
     created_at: datetime
     context_key: str | None = None
+
+
+class RelationCandidate(BaseModel):
+    target_id: str
+    relation: Literal["equivalent", "parent_child", "related"]
+    confidence: Literal["low", "high", "ambiguous"]
+    direction: Literal["target_parent", "target_child"] = "target_parent"
+
+
+class ConceptProposal(BaseModel):
+    name: str = Field(min_length=1)
+    relation_candidates: list[RelationCandidate] = Field(default_factory=list)
+
+
+class ConceptResolution(BaseModel):
+    concept_id: str
+    canonical_name: str
+    normalized_name: str
+    created: bool
