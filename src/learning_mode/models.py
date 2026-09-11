@@ -31,3 +31,18 @@ class SessionRecord(BaseModel):
     cutoff_at: datetime | None
     created_at: datetime
     suspension_reason: str | None = None
+
+
+class ProjectRecord(BaseModel):
+    project_id: str
+    name: str
+    current_path: str
+    first_seen_at: datetime
+    last_seen_at: datetime
+
+
+class ProjectIntent(BaseModel):
+    schema_version: int = 1
+    goals: list[str]
+    comfortable: list[str]
+    deprioritized: list[str]
