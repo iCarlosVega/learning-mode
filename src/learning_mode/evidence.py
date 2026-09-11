@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from collections.abc import Callable
 from typing import Protocol
 
@@ -88,25 +89,36 @@ class EvidenceService:
             "context_key": candidate.context_key,
         }
 
-        with self.db.transaction() as conn:
-            conn.execute(
-                """
-                INSERT INTO evidence_events (
-                    event_id, session_id, project_id, concept_id, event_type,
-                    assistance_level, payload_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    event_id,
-                    candidate.session_id,
-                    candidate.project_id,
-                    concept_id,
-                    candidate.evidence_type.value,
-                    candidate.assistance_level.value,
-                    json.dumps(payload, sort_keys=True),
-                    to_db_timestamp(created_at),
-                ),
-            )
+        try:
+            with self.db.transaction() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO evidence_events (
+                        event_id, session_id, project_id, concept_id, event_type,
+                        assistance_level, payload_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        event_id,
+                        candidate.session_id,
+                        candidate.project_id,
+                        concept_id,
+                        candidate.evidence_type.value,
+                        candidate.assistance_level.value,
+                        json.dumps(payload, sort_keys=True),
+                        to_db_timestamp(created_at),
+                    ),
+                )
+        except sqlite3.IntegrityError:
+            try:
+                existing = self.get(event_id)
+            except LookupError:
+                raise
+            if not self._matches_candidate(existing, candidate, concept_id, effective):
+                raise InvalidObservation(
+                    f"event_id {event_id} is already used by another observation"
+                )
+            return existing.model_copy(update={"duplicate": True})
         return self.get(event_id)
 
     def get(self, event_id: str) -> EvidenceEvent:
@@ -187,3 +199,25 @@ class EvidenceService:
             )
             for dimension, strength in dimensions.items()
         }
+
+    @staticmethod
+    def _matches_candidate(
+        event: EvidenceEvent,
+        candidate: CandidateObservation,
+        concept_id: str,
+        effective: dict[KnowledgeDimension, EvidenceStrength],
+    ) -> bool:
+        return (
+            event.session_id == candidate.session_id
+            and event.project_id == candidate.project_id
+            and event.concept_id == concept_id
+            and event.concept_name == candidate.concept_name
+            and event.event_type is candidate.evidence_type
+            and event.assistance_level is candidate.assistance_level
+            and event.dimensions == effective
+            and event.claimed_dimensions == candidate.dimensions
+            and event.agent_confidence == candidate.agent_confidence
+            and event.summary == candidate.summary
+            and event.occurred_at == candidate.occurred_at
+            and event.context_key == candidate.context_key
+        )

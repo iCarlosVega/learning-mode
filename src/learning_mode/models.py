@@ -124,6 +124,7 @@ class EvidenceEvent(BaseModel):
     occurred_at: datetime
     created_at: datetime
     context_key: str | None = None
+    duplicate: bool = False
 
 
 class RelationCandidate(BaseModel):

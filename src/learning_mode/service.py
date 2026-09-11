@@ -206,8 +206,12 @@ class LearningService:
             event = self.evidence.submit(candidate)
             return ResultEnvelope(
                 ok=True,
-                status="recorded",
-                message="Candidate observation was validated and recorded.",
+                status="duplicate" if event.duplicate else "recorded",
+                message=(
+                    "Duplicate candidate observation was already recorded."
+                    if event.duplicate
+                    else "Candidate observation was validated and recorded."
+                ),
                 data={"event_id": event.event_id, "concept_id": event.concept_id},
             )
         except SessionNotActive:
