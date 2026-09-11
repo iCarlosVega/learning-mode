@@ -191,3 +191,28 @@ class UnderstandingDebtItem(BaseModel):
     status: Literal["open", "resolved"]
     rationale: str
     updated_at: datetime
+
+
+class LearnerContextRequest(BaseModel):
+    project_id: str
+    concept_ids: list[str]
+    task_summary: str
+
+
+class ConceptContext(BaseModel):
+    concept_id: str
+    name: str
+    dimensions: dict[KnowledgeDimension, QualitativeLevel]
+    retention: Literal["current", "stale", "unknown"]
+    misconception_status: Literal["none", "active", "corrected"]
+    understanding_debt: Literal["none", "open"]
+    learning_depth: Literal["primary", "project_requirement"] | None
+
+
+class LearnerContext(BaseModel):
+    project_id: str
+    task_summary: str
+    goals: list[str]
+    comfortable: list[str]
+    deprioritized: list[str]
+    concepts: list[ConceptContext]
