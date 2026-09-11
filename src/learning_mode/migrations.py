@@ -1,6 +1,6 @@
 from learning_mode.db import Database
 
-LATEST_SCHEMA_VERSION = 1
+LATEST_SCHEMA_VERSION = 2
 
 
 _MIGRATION_1 = """
@@ -75,6 +75,17 @@ CREATE TABLE understanding_debt (
 );
 """
 
+_MIGRATION_2 = """
+ALTER TABLE sessions ADD COLUMN suspension_reason TEXT;
+
+CREATE TABLE session_intervals (
+  session_id TEXT NOT NULL REFERENCES sessions(session_id),
+  started_at TEXT NOT NULL,
+  ended_at TEXT,
+  PRIMARY KEY(session_id, started_at)
+);
+"""
+
 
 def migrate(db: Database) -> None:
     """Bring *db* to the latest schema version."""
@@ -83,4 +94,7 @@ def migrate(db: Database) -> None:
         if version < 1:
             conn.executescript(_MIGRATION_1)
             conn.execute("PRAGMA user_version = 1")
-
+            version = 1
+        if version < 2:
+            conn.executescript(_MIGRATION_2)
+            conn.execute("PRAGMA user_version = 2")
