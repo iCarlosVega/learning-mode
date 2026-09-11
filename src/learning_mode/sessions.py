@@ -131,6 +131,16 @@ class SessionService:
         except SessionNotFound:
             return False
 
+    def attach_project(self, session_id: str, project_id: str) -> SessionRecord:
+        with self.db.transaction() as conn:
+            cursor = conn.execute(
+                "UPDATE sessions SET project_id = ? WHERE session_id = ?",
+                (project_id, session_id),
+            )
+            if cursor.rowcount == 0:
+                raise SessionNotFound(session_id)
+        return self.get(session_id)
+
     def accepts_event_at(self, session_id: str, occurred_at: datetime) -> bool:
         if not self.is_active(session_id):
             return False

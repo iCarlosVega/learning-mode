@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -216,3 +216,17 @@ class LearnerContext(BaseModel):
     comfortable: list[str]
     deprioritized: list[str]
     concepts: list[ConceptContext]
+
+
+class ResultEnvelope(BaseModel):
+    ok: bool
+    status: str
+    message: str
+    host_should_continue: bool = True
+    data: dict[str, Any] | list[Any] | None = None
+
+
+class LearningSuspended(ResultEnvelope):
+    ok: bool = False
+    status: Literal["suspended"] = "suspended"
+    host_should_continue: bool = True

@@ -1,0 +1,192 @@
+import sqlite3
+from collections.abc import Callable, Sequence
+from pathlib import Path
+
+from learning_mode.concepts import ConceptService
+from learning_mode.context import ContextService
+from learning_mode.db import Database
+from learning_mode.debt import DebtService
+from learning_mode.evidence import EvidenceService, InvalidObservation, SessionNotActive
+from learning_mode.knowledge import KnowledgeProjector
+from learning_mode.migrations import migrate
+from learning_mode.models import (
+    CandidateObservation,
+    LearningSuspended,
+    PUCProposal,
+    ResultEnvelope,
+)
+from learning_mode.paths import LearningPaths
+from learning_mode.projects import ProjectService
+from learning_mode.puc import PUCService
+from learning_mode.sessions import SessionService
+
+
+class LearningService:
+    """The only Core boundary used by host adapters and the CLI."""
+
+    def __init__(self, home: Path | LearningPaths):
+        self.paths = home if isinstance(home, LearningPaths) else LearningPaths(home)
+        self.db = Database(self.paths.database)
+        migrate(self.db)
+        self.sessions = SessionService(self.db)
+        self.projects = ProjectService(self.db)
+        self.concepts = ConceptService(self.db)
+        self.evidence = EvidenceService(self.db, self.sessions, self.concepts)
+        self.knowledge = KnowledgeProjector(self.db, self.evidence)
+        self.puc = PUCService(self.db, self.concepts)
+        self.debt = DebtService(self.db, self.knowledge)
+        self.context = ContextService(
+            self.projects, self.concepts, self.knowledge, self.puc, self.debt
+        )
+
+    def session_start(
+        self, host: str, project_id: str | None = None
+    ) -> ResultEnvelope:
+        try:
+            session = self.sessions.start(host, project_id)
+            return ResultEnvelope(
+                ok=True,
+                status=session.status,
+                message="Learning Mode session created; learning starts off.",
+                data=session.model_dump(mode="json"),
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(None, error)
+
+    def learn_on(
+        self, session_id: str, project_path: Path | None = None
+    ) -> ResultEnvelope:
+        try:
+            if project_path is not None:
+                project = self.projects.register(project_path)
+                self.sessions.attach_project(session_id, project.project_id)
+            session = self.sessions.activate(session_id)
+            return ResultEnvelope(
+                ok=True,
+                status="on",
+                message="Learning Mode is active for this session.",
+                data=session.model_dump(mode="json"),
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(session_id, error)
+
+    def learn_off(
+        self, session_id: str, finalize: Callable[[], None] | None = None
+    ) -> ResultEnvelope:
+        try:
+            session = self.sessions.deactivate(
+                session_id, finalize=finalize or (lambda: None)
+            )
+            return ResultEnvelope(
+                ok=True,
+                status="off",
+                message="Learning Mode is off for this session.",
+                data=session.model_dump(mode="json"),
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(session_id, error)
+
+    def status(self, session_id: str) -> ResultEnvelope:
+        try:
+            session = self.sessions.get(session_id)
+            return ResultEnvelope(
+                ok=True,
+                status=session.status,
+                message=f"Learning Mode is {session.status} for this session.",
+                data=session.model_dump(mode="json"),
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(session_id, error)
+
+    def register_project(self, path: Path) -> ResultEnvelope:
+        try:
+            project = self.projects.register(path)
+            return ResultEnvelope(
+                ok=True,
+                status="registered",
+                message="Project identity is registered locally.",
+                data=project.model_dump(mode="json"),
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(None, error)
+
+    def learner_context(
+        self,
+        session_id: str,
+        project_id: str,
+        concept_ids: list[str],
+        task_summary: str,
+    ) -> ResultEnvelope:
+        if not self.sessions.is_active(session_id):
+            return ResultEnvelope(
+                ok=True,
+                status="off",
+                message="Learning Mode is off for this session.",
+            )
+        try:
+            context = self.context.for_task(project_id, concept_ids, task_summary)
+            return ResultEnvelope(
+                ok=True,
+                status="on",
+                message="Derived learner context ready.",
+                data=context.model_dump(mode="json"),
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(session_id, error)
+
+    def submit_observation(
+        self, candidate: CandidateObservation
+    ) -> ResultEnvelope:
+        return self.safe_submit_observation(candidate)
+
+    def safe_submit_observation(
+        self, candidate: CandidateObservation
+    ) -> ResultEnvelope:
+        try:
+            event = self.evidence.submit(candidate)
+            return ResultEnvelope(
+                ok=True,
+                status="recorded",
+                message="Candidate observation was validated and recorded.",
+                data={"event_id": event.event_id, "concept_id": event.concept_id},
+            )
+        except SessionNotActive:
+            return ResultEnvelope(
+                ok=False,
+                status="off",
+                message="Observation rejected because Learning Mode is off.",
+            )
+        except InvalidObservation as error:
+            return ResultEnvelope(
+                ok=False,
+                status="rejected",
+                message=f"Candidate observation rejected: {error}",
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(candidate.session_id, error)
+
+    def apply_puc_proposals(
+        self, project_id: str, proposals: Sequence[PUCProposal]
+    ) -> ResultEnvelope:
+        try:
+            entries = self.puc.apply_proposals(project_id, proposals)
+            return ResultEnvelope(
+                ok=True,
+                status="updated",
+                message="Project Understanding Contract updated.",
+                data=[entry.model_dump(mode="json") for entry in entries],
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(None, error)
+
+    def _suspended(
+        self, session_id: str | None, error: BaseException
+    ) -> LearningSuspended:
+        if session_id is not None:
+            try:
+                self.sessions.suspend(session_id, str(error))
+            except (OSError, sqlite3.Error):
+                pass
+        return LearningSuspended(
+            message=f"Learning Mode suspended; host work should continue: {error}"
+        )
