@@ -2,6 +2,7 @@ import sqlite3
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from learning_mode.assessment import AssessmentService
 from learning_mode.concepts import ConceptService
 from learning_mode.context import ContextService
 from learning_mode.db import Database
@@ -11,6 +12,7 @@ from learning_mode.knowledge import KnowledgeProjector
 from learning_mode.migrations import migrate
 from learning_mode.models import (
     CandidateObservation,
+    AssessmentResult,
     LearningSuspended,
     PUCProposal,
     ResultEnvelope,
@@ -37,6 +39,14 @@ class LearningService:
         self.debt = DebtService(self.db, self.knowledge)
         self.context = ContextService(
             self.projects, self.concepts, self.knowledge, self.puc, self.debt
+        )
+        self.assessment = AssessmentService(
+            sessions=self.sessions,
+            concepts=self.concepts,
+            projector=self.knowledge,
+            puc=self.puc,
+            debt=self.debt,
+            evidence=self.evidence,
         )
 
     def session_start(
@@ -178,6 +188,52 @@ class LearningService:
             )
         except (OSError, sqlite3.Error) as error:
             return self._suspended(None, error)
+
+    def assessment_request(
+        self,
+        scope: str,
+        project_id: str | None = None,
+        concept_ids: list[str] | None = None,
+    ) -> ResultEnvelope:
+        try:
+            brief = self.assessment.request(
+                scope=scope, project_id=project_id, concept_ids=concept_ids
+            )
+            return ResultEnvelope(
+                ok=True,
+                status="ready",
+                message="Assessment brief ready for the active host agent.",
+                data=brief.model_dump(mode="json"),
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(None, error)
+
+    def assessment_result(self, result: AssessmentResult) -> ResultEnvelope:
+        try:
+            events = self.assessment.record_result(result)
+            return ResultEnvelope(
+                ok=True,
+                status="recorded",
+                message="Assessment result recorded as new evidence.",
+                data=[
+                    {"event_id": event.event_id, "concept_id": event.concept_id}
+                    for event in events
+                ],
+            )
+        except SessionNotActive:
+            return ResultEnvelope(
+                ok=False,
+                status="off",
+                message="Assessment result rejected because Learning Mode is off.",
+            )
+        except InvalidObservation as error:
+            return ResultEnvelope(
+                ok=False,
+                status="rejected",
+                message=f"Assessment result rejected: {error}",
+            )
+        except (OSError, sqlite3.Error) as error:
+            return self._suspended(result.session_id, error)
 
     def _suspended(
         self, session_id: str | None, error: BaseException

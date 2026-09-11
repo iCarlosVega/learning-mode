@@ -230,3 +230,35 @@ class LearningSuspended(ResultEnvelope):
     ok: bool = False
     status: Literal["suspended"] = "suspended"
     host_should_continue: bool = True
+
+
+class AssessmentTarget(BaseModel):
+    concept_id: str
+    name: str
+    learning_depth: Literal["primary", "project_requirement"] | None
+    dimensions: dict[KnowledgeDimension, QualitativeLevel]
+    misconception_status: Literal["none", "active", "corrected"]
+    understanding_debt: Literal["none", "open"]
+
+
+class AssessmentBrief(BaseModel):
+    scope: Literal["concept", "project", "weakest", "since"]
+    project_id: str | None
+    targets: list[AssessmentTarget]
+    instruction: str
+
+
+class AssessmentResult(BaseModel):
+    session_id: str
+    concept_id: str
+    dimensions: dict[KnowledgeDimension, EvidenceStrength] = Field(min_length=1)
+    outcome: Literal[
+        "practiced",
+        "demonstrated",
+        "misconception",
+        "corrected",
+        "insufficient_evidence",
+    ]
+    assistance_level: AssistanceLevel
+    summary: str = Field(min_length=1)
+    context_key: str | None = None
