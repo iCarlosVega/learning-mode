@@ -20,3 +20,11 @@ def test_protocol_names_every_required_adapter_operation(repo_root):
         "test record",
     ]:
         assert f"learn {operation}" in text
+
+
+def test_readme_states_core_privacy_invariants(repo_root):
+    text = (repo_root / "README.md").read_text()
+    assert "starts OFF" in text
+    assert "local" in text.lower()
+    assert "raw evidence" in text.lower()
+    assert "Obsidian" in text and "future" in text.lower()
