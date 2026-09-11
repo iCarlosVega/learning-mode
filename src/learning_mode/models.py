@@ -142,3 +142,24 @@ class ConceptResolution(BaseModel):
     canonical_name: str
     normalized_name: str
     created: bool
+
+
+class QualitativeLevel(str, Enum):
+    UNSEEN = "unseen"
+    INTRODUCED = "introduced"
+    PRACTICED = "practiced"
+    DEMONSTRATED = "demonstrated"
+    DURABLE = "durable"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+
+
+class DimensionKnowledgeState(BaseModel):
+    level: QualitativeLevel
+    retention: Literal["current", "stale", "unknown"] = "unknown"
+
+
+class ConceptKnowledgeState(BaseModel):
+    concept_id: str
+    dimensions: dict[KnowledgeDimension, DimensionKnowledgeState]
+    current_misconception_status: Literal["none", "active", "corrected"]
+    derived_at: datetime
