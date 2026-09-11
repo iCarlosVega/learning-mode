@@ -1,0 +1,11 @@
+{
+  "concept_name": "Redis caching",
+  "evidence_type": "independent_application",
+  "assistance_level": "none",
+  "dimensions": {
+    "application": "strong"
+  },
+  "agent_confidence": "high",
+  "summary": "E2E-RAW-SENTINEL: developer independently applied cache-aside invalidation.",
+  "context_key": "project-a-cache-aside"
+}

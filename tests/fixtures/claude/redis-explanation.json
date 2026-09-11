@@ -1,0 +1,11 @@
+{
+  "concept_name": "Redis caching",
+  "evidence_type": "explanation",
+  "assistance_level": "none",
+  "dimensions": {
+    "conceptual": "strong"
+  },
+  "agent_confidence": "high",
+  "summary": "Developer explained cache invalidation tradeoffs in a new host session.",
+  "context_key": "project-a-invalidation-tradeoffs"
+}
