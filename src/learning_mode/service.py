@@ -18,6 +18,7 @@ from learning_mode.models import (
     ResultEnvelope,
 )
 from learning_mode.paths import LearningPaths
+from learning_mode.portability import PortabilityService
 from learning_mode.projects import ProjectService
 from learning_mode.puc import PUCService
 from learning_mode.sessions import SessionNotFound, SessionService
@@ -48,6 +49,7 @@ class LearningService:
             debt=self.debt,
             evidence=self.evidence,
         )
+        self.portability = PortabilityService(self.paths, self.db)
 
     def session_start(
         self,
