@@ -1,6 +1,6 @@
 from learning_mode.db import Database
 
-LATEST_SCHEMA_VERSION = 2
+LATEST_SCHEMA_VERSION = 3
 
 
 _MIGRATION_1 = """
@@ -86,6 +86,16 @@ CREATE TABLE session_intervals (
 );
 """
 
+_MIGRATION_3 = """
+CREATE TRIGGER evidence_events_no_update
+BEFORE UPDATE ON evidence_events
+BEGIN SELECT RAISE(ABORT, 'evidence is append-only'); END;
+
+CREATE TRIGGER evidence_events_no_delete
+BEFORE DELETE ON evidence_events
+BEGIN SELECT RAISE(ABORT, 'evidence is append-only'); END;
+"""
+
 
 def migrate(db: Database) -> None:
     """Bring *db* to the latest schema version."""
@@ -98,3 +108,7 @@ def migrate(db: Database) -> None:
         if version < 2:
             conn.executescript(_MIGRATION_2)
             conn.execute("PRAGMA user_version = 2")
+            version = 2
+        if version < 3:
+            conn.executescript(_MIGRATION_3)
+            conn.execute("PRAGMA user_version = 3")

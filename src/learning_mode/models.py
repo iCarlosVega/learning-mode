@@ -1,9 +1,10 @@
 """Validated public models shared by Core services and host adapters."""
 
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 def now_utc() -> datetime:
@@ -46,3 +47,79 @@ class ProjectIntent(BaseModel):
     goals: list[str]
     comfortable: list[str]
     deprioritized: list[str]
+
+
+class EvidenceType(str, Enum):
+    EXPOSURE = "exposure"
+    EXPLANATION = "explanation"
+    GUIDED_APPLICATION = "guided_application"
+    INDEPENDENT_APPLICATION = "independent_application"
+    TRANSFER = "transfer"
+    MISCONCEPTION = "misconception"
+    DEPENDENCE = "dependence"
+    FRAGILITY = "fragility"
+    CORRECTION = "correction"
+    ASSESSMENT = "assessment"
+
+
+class AssistanceLevel(str, Enum):
+    NONE = "none"
+    LIGHT_HINT = "light_hint"
+    TARGETED_HINT = "targeted_hint"
+    CONCEPTUAL_EXPLANATION = "conceptual_explanation"
+    SCAFFOLDED = "scaffolded"
+    PAIRED = "paired"
+    AGENT_COMPLETED = "agent_completed"
+
+
+class KnowledgeDimension(str, Enum):
+    CONCEPTUAL = "conceptual"
+    APPLICATION = "application"
+    IMPLEMENTATION = "implementation"
+    DEBUGGING = "debugging"
+    TRADEOFFS = "tradeoffs"
+    TRANSFER = "transfer"
+
+
+class EvidenceStrength(str, Enum):
+    WEAK = "weak"
+    MODERATE = "moderate"
+    STRONG = "strong"
+
+
+class CandidateObservation(BaseModel):
+    session_id: str
+    project_id: str | None = None
+    concept_name: str = Field(min_length=1)
+    evidence_type: EvidenceType
+    assistance_level: AssistanceLevel
+    dimensions: dict[KnowledgeDimension, EvidenceStrength] = Field(min_length=1)
+    agent_confidence: Literal["low", "medium", "high", "ambiguous"]
+    summary: str = Field(min_length=1)
+    occurred_at: datetime = Field(default_factory=now_utc)
+    context_key: str | None = None
+    event_id: str | None = None
+
+    @field_validator("occurred_at")
+    @classmethod
+    def timestamp_is_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("occurred_at must be timezone-aware")
+        return value
+
+
+class EvidenceEvent(BaseModel):
+    event_id: str
+    session_id: str
+    project_id: str | None
+    concept_id: str
+    concept_name: str
+    event_type: EvidenceType
+    assistance_level: AssistanceLevel
+    dimensions: dict[KnowledgeDimension, EvidenceStrength]
+    claimed_dimensions: dict[KnowledgeDimension, EvidenceStrength]
+    agent_confidence: Literal["low", "medium", "high", "ambiguous"]
+    summary: str
+    occurred_at: datetime
+    created_at: datetime
+    context_key: str | None = None
