@@ -12,4 +12,3 @@ disable-model-invocation: true
 4. When status is `off`, immediately stop all Learning Mode teaching, observation, inference, context requests, and state mutation. Continue as normal Claude Code.
 
 If the Core fails, report suspension briefly and continue the coding task normally.
-

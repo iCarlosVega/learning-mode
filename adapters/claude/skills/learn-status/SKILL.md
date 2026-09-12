@@ -7,4 +7,3 @@ disable-model-invocation: true
 # Learning Mode Status
 
 Run `learn status --session "$LEARNING_MODE_SESSION_ID" --json` and report its status concisely. Do not enable Learning Mode, inspect derived learner context, or infer learning evidence as part of a status request.
-

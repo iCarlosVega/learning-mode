@@ -1,3 +1,4 @@
+import sqlite3
 from collections.abc import Callable
 from datetime import datetime
 
@@ -166,23 +167,35 @@ class SessionService:
         return self._record(row) if row is not None else None
 
     def accepts_event_at(self, session_id: str, occurred_at: datetime) -> bool:
-        if not self.is_active(session_id):
-            return False
+        with self.db.connect() as conn:
+            return self.accepts_event_at_in(conn, session_id, occurred_at)
+
+    def accepts_event_at_in(
+        self,
+        conn: sqlite3.Connection,
+        session_id: str,
+        occurred_at: datetime,
+    ) -> bool:
         occurred = to_db_timestamp(occurred_at)
         current = to_db_timestamp(self._now())
         if occurred > current:
             return False
-        with self.db.connect() as conn:
-            row = conn.execute(
-                """
-                SELECT 1 FROM session_intervals
-                WHERE session_id = ?
-                  AND started_at <= ?
-                  AND (ended_at IS NULL OR ? <= ended_at)
-                LIMIT 1
-                """,
-                (session_id, occurred, occurred),
-            ).fetchone()
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM sessions
+            JOIN session_intervals USING (session_id)
+            WHERE sessions.session_id = ?
+              AND sessions.status = 'on'
+              AND session_intervals.started_at <= ?
+              AND (
+                session_intervals.ended_at IS NULL
+                OR ? <= session_intervals.ended_at
+              )
+            LIMIT 1
+            """,
+            (session_id, occurred, occurred),
+        ).fetchone()
         return row is not None
 
     @staticmethod

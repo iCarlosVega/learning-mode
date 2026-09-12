@@ -60,4 +60,3 @@ Use misconception, dependence, or fragility only for concrete observed behavior.
 7. Propose PUC changes when the finite project-understanding boundary evolves.
 8. For an explicit assessment, request a derived assessment brief, create fresh questions dynamically, and record only the result as new evidence.
 9. Deactivate after finalizing already-completed observations, then stop all Learning Mode behavior.
-

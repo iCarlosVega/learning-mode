@@ -3,7 +3,7 @@ import json
 from typer.testing import CliRunner
 
 from learning_mode.cli import app
-from learning_mode.models import CandidateObservation
+from learning_mode.models import AssessmentResult, CandidateObservation
 from learning_mode.service import LearningService
 
 
@@ -174,3 +174,32 @@ def test_cli_help_lists_v1_command_groups():
         assert command in result.stdout
     assert "project" in result.stdout
     assert "test" in result.stdout
+
+
+def test_adapter_acknowledgements_expose_concept_ids_but_no_raw_event_data(tmp_path):
+    service = LearningService(tmp_path / "home")
+    session = service.sessions.start("codex", None)
+    service.sessions.activate(session.session_id)
+    observation = make_candidate(session.session_id).model_copy(
+        update={"summary": "ADAPTER-RAW-SENTINEL observation details"}
+    )
+
+    observed = service.safe_submit_observation(observation)
+    concept_id = observed.data["concept_id"]
+    assessed = service.assessment_result(
+        AssessmentResult(
+            session_id=session.session_id,
+            concept_id=concept_id,
+            dimensions={"debugging": "strong"},
+            outcome="demonstrated",
+            assistance_level="none",
+            summary="ADAPTER-RAW-SENTINEL assessment details",
+        )
+    )
+
+    for result in (observed, assessed):
+        serialized = result.model_dump_json()
+        assert "concept_id" in serialized
+        assert "event_id" not in serialized
+        assert "payload_json" not in serialized
+        assert "ADAPTER-RAW-SENTINEL" not in serialized

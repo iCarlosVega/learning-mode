@@ -22,4 +22,3 @@ def resolve_project_root(start: Path) -> Path:
         if (candidate / ".git").exists():
             return candidate
     return current
-

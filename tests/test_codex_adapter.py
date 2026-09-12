@@ -80,4 +80,3 @@ def test_codex_agents_snippet_is_advertising_only(repo_root):
     assert "do not activate" in text
     assert "do not inspect" in text
     assert "do not observe" in text
-

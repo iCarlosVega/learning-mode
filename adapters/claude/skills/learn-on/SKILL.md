@@ -14,4 +14,3 @@ disable-model-invocation: true
 6. Classify only concepts relevant to the current task. Propose PUC entries, then request derived context for the returned concept IDs. Never request raw evidence.
 
 Learning Mode is session-scoped. Prior project history does not activate it. Any Core error suspends learning behavior but never blocks the coding task.
-

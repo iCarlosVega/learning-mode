@@ -13,4 +13,3 @@ def is_valid_id(value: str, prefix: str) -> bool:
     return value.startswith(expected) and len(suffix) == 32 and all(
         character in "0123456789abcdef" for character in suffix
     )
-

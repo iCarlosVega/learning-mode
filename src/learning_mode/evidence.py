@@ -91,6 +91,10 @@ class EvidenceService:
 
         try:
             with self.db.transaction() as conn:
+                if not self.sessions.accepts_event_at_in(
+                    conn, candidate.session_id, candidate.occurred_at
+                ):
+                    raise SessionNotActive(candidate.session_id)
                 conn.execute(
                     """
                     INSERT INTO evidence_events (

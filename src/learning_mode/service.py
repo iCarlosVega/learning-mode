@@ -212,7 +212,7 @@ class LearningService:
                     if event.duplicate
                     else "Candidate observation was validated and recorded."
                 ),
-                data={"event_id": event.event_id, "concept_id": event.concept_id},
+                data={"concept_id": event.concept_id},
             )
         except SessionNotActive:
             return ResultEnvelope(
@@ -269,10 +269,7 @@ class LearningService:
                 ok=True,
                 status="recorded",
                 message="Assessment result recorded as new evidence.",
-                data=[
-                    {"event_id": event.event_id, "concept_id": event.concept_id}
-                    for event in events
-                ],
+                data=[{"concept_id": event.concept_id} for event in events],
             )
         except SessionNotActive:
             return ResultEnvelope(

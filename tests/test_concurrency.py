@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 
-from learning_mode.models import CandidateObservation
+from learning_mode.models import CandidateObservation, ConceptProposal
 from learning_mode.service import LearningService
 
 
@@ -56,3 +57,32 @@ def test_concurrent_duplicate_event_id_is_idempotent(tmp_path):
     assert sorted(result.status for result in results) == ["duplicate", "recorded"]
     assert coordinator.evidence.count_for_session(session.session_id) == 1
     assert coordinator.sessions.get(session.session_id).status == "on"
+
+
+def test_cutoff_rejects_observation_that_has_not_started_its_write(tmp_path):
+    service = LearningService(tmp_path / "home")
+    session = service.sessions.start("codex", None)
+    service.sessions.activate(session.session_id)
+    concept = service.concepts.resolve(ConceptProposal(name="Cutoff races"))
+    resolver_entered = Event()
+    allow_resolution = Event()
+
+    class BlockingResolver:
+        def resolve_name(self, _name):
+            resolver_entered.set()
+            assert allow_resolution.wait(timeout=5)
+            return concept.concept_id
+
+    service.evidence.concepts = BlockingResolver()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(
+            service.safe_submit_observation,
+            candidate(session.session_id, "Must not cross the hard cutoff."),
+        )
+        assert resolver_entered.wait(timeout=5)
+        assert service.learn_off(session.session_id).status == "off"
+        allow_resolution.set()
+        result = pending.result(timeout=5)
+
+    assert result.status == "off"
+    assert service.evidence.count_for_session(session.session_id) == 0
